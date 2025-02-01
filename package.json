@@ -6,7 +6,8 @@
   "main": "src/index.ts",
   "scripts": {
     "start": "bun src/index.ts",
-    "dev": "bun --watch src/index.ts"
+    "dev": "bun --watch src/index.ts",
+    "build": "bun build ./src/index.ts --outdir=dist --target=bun"
   },
   "dependencies": {
     "@neynar/nodejs-sdk": "^2.9.0",
