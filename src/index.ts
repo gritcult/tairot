@@ -1,11 +1,20 @@
-import { Elysia } from "elysia";
-import { NeynarAPIClient, Configuration } from "@neynar/nodejs-sdk";
-import OpenAI from "openai";
-import { TarotReader } from "./tarot.js";
+import { config } from 'dotenv';
+import { Elysia } from 'elysia';
+import { NeynarAPIClient, Configuration } from '@neynar/nodejs-sdk';
+import OpenAI from 'openai';
+import { TarotReader } from './tarot.js';
+import { createServer } from 'http';
+
+// Load environment variables
+config();
+
+// Check required environment variables
+if (!process.env.NEYNAR_API_KEY) throw new Error('NEYNAR_API_KEY is required');
+if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is required');
 
 // Initialize API clients
 const neynarClient = new NeynarAPIClient(
-  new Configuration({ apiKey: process.env.NEYNAR_API_KEY! })
+  new Configuration({ apiKey: process.env.NEYNAR_API_KEY })
 );
 
 const openaiClient = new OpenAI({
@@ -24,10 +33,10 @@ interface WebhookBody {
   };
 }
 
-// Create the server
+// Create the Elysia app
 const app = new Elysia()
   .get("/", () => new Response("🔮 Tarot bot is alive"))
-  .post("/webhook", async ({ request }) => {
+  .post("/webhook", async ({ request }: { request: Request }) => {
     try {
       const body = await request.json() as WebhookBody;
       console.log("Received webhook:", body);
@@ -97,17 +106,40 @@ const app = new Elysia()
   });
 
 // For local development
-if (process.env.NODE_ENV === 'development') {
+if (process.env.NODE_ENV !== 'production' && typeof process !== 'undefined') {
   console.log("Starting development server...");
-  const port = process.env.PORT ? parseInt(process.env.PORT) : 3002;
-  Bun.serve({
-    fetch: app.fetch,
-    port: port
+  
+  const port = process.env.PORT ? parseInt(process.env.PORT) : 12345;
+  
+  const server = createServer(async (req, res) => {
+    try {
+      // Convert Node.js request to Web Request
+      const url = new URL(req.url || '/', `http://${req.headers.host}`);
+      const body = req.method === 'POST' ? await new Promise<Buffer>((resolve) => {
+        const chunks: Buffer[] = [];
+        req.on('data', chunk => chunks.push(chunk));
+        req.on('end', () => resolve(Buffer.concat(chunks)));
+      }) : undefined;
+
+      const webRequest = new Request(url.toString(), {
+        method: req.method,
+        headers: new Headers(req.headers as Record<string, string>),
+        body: body ? body : undefined
+      });
+
+      const response = await app.fetch(webRequest);
+      res.writeHead(response.status, Object.fromEntries(response.headers.entries()));
+      res.end(await response.text());
+    } catch (error) {
+      console.error('Error handling request:', error);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Internal server error' }));
+    }
   });
-  console.log(`🔮 Tarot bot server running on port ${port}`);
+
+  server.listen(port, () => {
+    console.log(`🔮 Tarot bot server running at http://localhost:${port}`);
+  });
 }
 
-// Export for Vercel
-export default {
-  fetch: app.fetch
-};
+export default app;

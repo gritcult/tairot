@@ -1,6 +1,7 @@
-.git
 .env
-.env.local
+.env.*
 node_modules
+.git
+.gitignore
 README.md
-.gitignore 
+*.log 

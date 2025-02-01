@@ -47,37 +47,32 @@ export class TarotReader {
       await this.waitForRateLimit();
       
       const cards = this.drawCards(3);
-      const prompt = `You are a wise and mystical tarot reader. The querent asks: "${question}"
-      
-You have drawn these three cards in order:
-1. ${cards[0]} (Past/Influence)
-2. ${cards[1]} (Present/Challenge)
-3. ${cards[2]} (Future/Outcome)
+      const prompt = `You are a mystical tarot card reader. You should:
+1. Draw three cards from a standard tarot deck
+2. Interpret their meaning in relation to the question
+3. Keep the response concise (under 280 characters)
+4. Use mystical/fortune teller language
+5. Include emojis for visual flair`;
 
-Provide a concise but insightful tarot reading that interprets these cards in relation to their question.
-Keep the response under 280 characters to fit in a Farcaster cast. Use emojis to make it engaging.
-Format: [Cards Drawn] followed by the interpretation.`;
-
-      const response = await this.openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 150,
-        temperature: 0.7,
+      const completion = await this.openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system",
+            content: prompt
+          },
+          {
+            role: "user",
+            content: question
+          }
+        ],
+        max_tokens: 150
       });
 
-      return response.choices[0].message.content || "I'm unable to provide a reading at this time. Please try again later. 🔮";
-    } catch (error: any) {
-      console.error('Error in tarot reading:', error);
-      
-      if (error?.error?.type === 'insufficient_quota') {
-        return "⚠️ The spirits are resting. The tarot reader needs to recharge their energy (API quota exceeded). Please try again tomorrow. 🔮";
-      }
-      
-      if (error?.error?.code === 'rate_limit_exceeded') {
-        return "🕐 The cards need a moment to realign. Please try again in a few minutes. 🔮";
-      }
-      
-      return "🌌 The cosmic energies are unclear at this moment. Please try again later. 🔮";
+      return completion.choices[0].message.content || "🔮 The spirits are unclear at this time...";
+    } catch (error) {
+      console.error('Error getting tarot reading:', error);
+      return "🔮 The spirits are unclear at this time... Please try again later.";
     }
   }
 } 

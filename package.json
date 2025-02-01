@@ -1,21 +1,23 @@
 {
-  "name": "farcaster-tarot-bot",
+  "name": "tarot-bot",
   "version": "1.0.0",
   "description": "A Farcaster bot that provides tarot readings",
   "type": "module",
   "scripts": {
-    "start": "bun src/index.ts",
-    "dev": "bun --watch src/index.ts"
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts"
   },
   "dependencies": {
     "@neynar/nodejs-sdk": "^2.9.0",
-    "@types/node": "^22.13.0",
-    "dotenv": "^16.4.1",
-    "elysia": "^1.2.11",
+    "dotenv": "^16.4.7",
+    "elysia": "^0.8.17",
     "openai": "^4.28.0"
   },
   "devDependencies": {
+    "@types/node": "^20.11.19",
     "bun-types": "latest",
-    "typescript": "^5.0.0"
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
   }
 }
