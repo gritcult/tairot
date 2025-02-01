@@ -103,43 +103,9 @@ const app = new Elysia()
         headers: { "Content-Type": "application/json" }
       });
     }
-  });
+  })
+  .listen(process.env.PORT || 3000);
 
-// For local development
-if (process.env.NODE_ENV !== 'production' && typeof process !== 'undefined') {
-  console.log("Starting development server...");
-  
-  const port = process.env.PORT ? parseInt(process.env.PORT) : 12345;
-  
-  const server = createServer(async (req, res) => {
-    try {
-      // Convert Node.js request to Web Request
-      const url = new URL(req.url || '/', `http://${req.headers.host}`);
-      const body = req.method === 'POST' ? await new Promise<Buffer>((resolve) => {
-        const chunks: Buffer[] = [];
-        req.on('data', chunk => chunks.push(chunk));
-        req.on('end', () => resolve(Buffer.concat(chunks)));
-      }) : undefined;
-
-      const webRequest = new Request(url.toString(), {
-        method: req.method,
-        headers: new Headers(req.headers as Record<string, string>),
-        body: body ? body : undefined
-      });
-
-      const response = await app.fetch(webRequest);
-      res.writeHead(response.status, Object.fromEntries(response.headers.entries()));
-      res.end(await response.text());
-    } catch (error) {
-      console.error('Error handling request:', error);
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Internal server error' }));
-    }
-  });
-
-  server.listen(port, () => {
-    console.log(`🔮 Tarot bot server running at http://localhost:${port}`);
-  });
-}
+console.log(`🔮 Tarot bot server running at ${app.server?.hostname}:${app.server?.port}`);
 
 export default app;
