@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "description": "A Farcaster bot that provides tarot readings",
   "type": "module",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
   "scripts": {
     "start": "bun src/index.ts",
     "dev": "bun --watch src/index.ts",
-    "build": "bun build ./src/index.ts --outdir=dist --target=bun"
+    "build": "tsc",
+    "vercel-build": "tsc"
   },
   "dependencies": {
     "@neynar/nodejs-sdk": "^2.9.0",

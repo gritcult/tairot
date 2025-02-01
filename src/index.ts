@@ -1,7 +1,7 @@
 import { Elysia } from "elysia";
 import { NeynarAPIClient, Configuration } from "@neynar/nodejs-sdk";
 import OpenAI from "openai";
-import { TarotReader } from "./tarot";
+import { TarotReader } from "./tarot.js";
 
 // Initialize API clients only if environment variables are present
 let neynarClient: NeynarAPIClient | null = null;

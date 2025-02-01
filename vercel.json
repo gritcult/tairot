@@ -1,16 +1,18 @@
 {
-  "buildCommand": "bun build ./src/index.ts --outdir=dist --target=bun",
-  "outputDirectory": "dist",
-  "devCommand": "bun run dev",
-  "cleanUrls": true,
-  "framework": null,
-  "installCommand": "bun install",
-  "regions": ["iad1"],
-  "functions": {
-    "dist/index.js": {
-      "runtime": "nodejs22.x",
-      "memory": 1024,
-      "maxDuration": 10
+  "version": 2,
+  "builds": [
+    {
+      "src": "src/**/*.ts",
+      "use": "@vercel/node",
+      "config": {
+        "nodeVersion": "22.x"
+      }
     }
-  }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "src/index.ts"
+    }
+  ]
 } 
