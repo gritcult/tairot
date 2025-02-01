@@ -2,6 +2,7 @@
   "name": "farcaster-tarot-bot",
   "version": "1.0.0",
   "description": "A Farcaster bot that provides tarot readings",
+  "type": "module",
   "main": "src/index.ts",
   "scripts": {
     "start": "bun src/index.ts",
