@@ -26,22 +26,28 @@ interface WebhookBody {
 
 // Create the server
 const app = new Elysia()
-  .get("/", () => "🔮 Tarot bot is alive")
-  .post("/webhook", async ({ body, set }: { body: WebhookBody, set: { status: number } }) => {
+  .get("/", () => new Response("🔮 Tarot bot is alive"))
+  .post("/webhook", async ({ request }) => {
     try {
+      const body = await request.json() as WebhookBody;
       console.log("Received webhook:", body);
 
       // Validate webhook data
       if (!body || !body.data || !body.type) {
         console.error("Invalid webhook data");
-        set.status = 400;
-        return { error: "Invalid webhook data" };
+        return new Response(JSON.stringify({ error: "Invalid webhook data" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" }
+        });
       }
 
       // Check if this is a cast mention
       if (body.type !== "cast.created") {
         console.log("Ignoring non-cast webhook");
-        return { status: "ok" };
+        return new Response(JSON.stringify({ status: "ok" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
       }
 
       // Check if the bot was mentioned
@@ -52,7 +58,10 @@ const app = new Elysia()
 
       if (!mentioned) {
         console.log("Bot not mentioned, ignoring");
-        return { status: "ok" };
+        return new Response(JSON.stringify({ status: "ok" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
       }
 
       // Extract the question (remove the bot mention)
@@ -71,10 +80,19 @@ const app = new Elysia()
         });
       }
 
-      return { status: "ok" };
+      return new Response(JSON.stringify({ status: "ok" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
     } catch (error) {
       console.error("Error processing webhook:", error);
-      return { status: "error", message: "Internal error, but webhook received" };
+      return new Response(JSON.stringify({ 
+        status: "error", 
+        message: "Internal error, but webhook received" 
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
     }
   });
 
@@ -90,4 +108,6 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // Export for Vercel
-export default app;
+export default {
+  fetch: app.fetch
+};
