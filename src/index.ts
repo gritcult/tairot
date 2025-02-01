@@ -5,26 +5,27 @@ import OpenAI from "openai";
 
 config();
 
-// Validate required environment variables
-const requiredEnvVars = [
-  'NEYNAR_API_KEY',
-  'NEYNAR_CLIENT_ID',
-  'SIGNER_UID',
-  'BOT_FID',
-  'OPENAI_API_KEY'
-];
+// Initialize API clients only if environment variables are present
+let neynar: NeynarAPIClient | null = null;
+let openai: OpenAI | null = null;
+let tarotReader: TarotReader | null = null;
 
-for (const envVar of requiredEnvVars) {
-  if (!process.env[envVar]) {
-    console.error(`Missing required environment variable: ${envVar}`);
+try {
+  if (!process.env.NEYNAR_API_KEY) {
+    throw new Error('Missing NEYNAR_API_KEY');
   }
-}
+  neynar = new NeynarAPIClient({ apiKey: process.env.NEYNAR_API_KEY });
 
-const neynar = new NeynarAPIClient({ apiKey: process.env.NEYNAR_API_KEY! });
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-const tarotReader = new TarotReader(openai);
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('Missing OPENAI_API_KEY');
+  }
+  openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  tarotReader = new TarotReader(openai);
+
+  console.log('Successfully initialized API clients');
+} catch (error) {
+  console.error('Error initializing API clients:', error);
+}
 
 // Vercel serverless function handler
 export default async function handler(req: Request) {
@@ -51,6 +52,11 @@ export default async function handler(req: Request) {
       return new Response("Method not allowed", { status: 405 });
     }
 
+    // Check if APIs are initialized
+    if (!neynar || !openai || !tarotReader) {
+      throw new Error('API clients not properly initialized. Check environment variables.');
+    }
+
     const body = await req.json();
     console.log("Received webhook event:", JSON.stringify(body, null, 2));
     
@@ -65,10 +71,14 @@ export default async function handler(req: Request) {
       const cast = body.data;
       const botFid = process.env.BOT_FID;
       
+      if (!botFid) {
+        throw new Error('Missing BOT_FID environment variable');
+      }
+
       console.log("Processing cast:", {
         hash: cast.hash,
         text: cast.text,
-        author: cast.author,
+        author: cast.author?.fid,
         mentioned_profiles: cast.mentioned_profiles
       });
 
@@ -87,16 +97,20 @@ export default async function handler(req: Request) {
         console.log("Generated reading:", reading);
         
         try {
+          if (!process.env.SIGNER_UID) {
+            throw new Error('Missing SIGNER_UID environment variable');
+          }
+
           // Reply to the cast using Neynar's API
           await neynar.publishCast({
-            signerUuid: process.env.SIGNER_UID!,
+            signerUuid: process.env.SIGNER_UID,
             text: reading,
             parent: cast.hash,
           });
           console.log("Successfully published response");
         } catch (castError) {
           console.error("Error publishing cast:", castError);
-          // Don't throw here, we still want to return 200 to acknowledge the webhook
+          throw castError; // Re-throw to be caught by main error handler
         }
       } else {
         console.log("Bot was not mentioned in this cast");
@@ -118,7 +132,8 @@ export default async function handler(req: Request) {
     });
     return new Response(JSON.stringify({
       error: e.message,
-      name: e.name
+      name: e.name,
+      stack: process.env.NODE_ENV === 'development' ? e.stack : undefined
     }), { 
       status: 500,
       headers: {
