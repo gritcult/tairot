@@ -1,115 +1,115 @@
-import { NeynarAPIClient } from "@neynar/nodejs-sdk";
-import { config } from "dotenv";
-import { TarotReader } from "./tarot";
+import { Elysia } from "elysia";
+import { NeynarAPIClient, Configuration } from "@neynar/nodejs-sdk";
 import OpenAI from "openai";
+import { TarotReader } from "./tarot";
 
-config();
+// Initialize API clients only if environment variables are present
+let neynarClient: NeynarAPIClient | null = null;
+let openaiClient: OpenAI | null = null;
+let tarotReader: TarotReader | null = null;
 
-// Simple health check function
-function healthCheck() {
-  const missingVars = [];
-  const required = ['NEYNAR_API_KEY', 'OPENAI_API_KEY', 'SIGNER_UID', 'BOT_FID'];
-  
-  for (const varName of required) {
-    if (!process.env[varName]) {
-      missingVars.push(varName);
-    }
+try {
+  if (!process.env.NEYNAR_API_KEY) {
+    console.error("Missing NEYNAR_API_KEY environment variable");
+  } else {
+    const config = new Configuration({ apiKey: process.env.NEYNAR_API_KEY });
+    neynarClient = new NeynarAPIClient(config);
   }
-  
-  if (missingVars.length > 0) {
-    throw new Error(`Missing environment variables: ${missingVars.join(', ')}`);
+
+  if (!process.env.OPENAI_API_KEY) {
+    console.error("Missing OPENAI_API_KEY environment variable");
+  } else {
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
+    tarotReader = new TarotReader(openaiClient);
   }
+} catch (error) {
+  console.error("Error initializing API clients:", error);
 }
 
-// Initialize API clients
-const neynar = new NeynarAPIClient({ apiKey: process.env.NEYNAR_API_KEY! });
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const tarotReader = new TarotReader(openai);
+interface WebhookBody {
+  type: string;
+  data: {
+    text: string;
+    hash: string;
+    mentioned_profiles?: Array<{ fid: string }>;
+  };
+}
 
-export default async function handler(req: Request) {
-  // Handle preflight requests for CORS
-  if (req.method === 'OPTIONS') {
-    return new Response('OK', {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
+const app = new Elysia()
+  .get("/", () => "🔮 Tarot bot is alive")
+  .post("/webhook", async ({ body, set }: { body: WebhookBody, set: { status: number } }) => {
+    try {
+      console.log("Received webhook:", body);
+
+      // Validate webhook data
+      if (!body || !body.data || !body.type) {
+        console.error("Invalid webhook data");
+        set.status = 400;
+        return { error: "Invalid webhook data" };
       }
-    });
-  }
 
-  try {
-    // Run health check
-    healthCheck();
+      // Check if this is a cast mention
+      if (body.type !== "cast.created") {
+        console.log("Ignoring non-cast webhook");
+        return { status: "ok" };
+      }
 
-    // Only accept POST requests
-    if (req.method !== 'POST') {
-      return new Response('Method not allowed', { status: 405 });
-    }
-
-    const body = await req.json();
-    console.log('Received webhook:', JSON.stringify(body, null, 2));
-
-    // Handle cast.created events
-    if (body.type === 'cast.created') {
-      const cast = body.data;
+      // Check if the bot was mentioned
       const botFid = process.env.BOT_FID;
-
-      // Check if our bot was mentioned
-      const wasBotMentioned = cast.mentioned_profiles?.some(
-        (profile: any) => profile.fid?.toString() === botFid
+      const mentioned = body.data.mentioned_profiles?.some(
+        (profile) => profile.fid === botFid
       );
 
-      if (wasBotMentioned) {
-        // Get the question (remove mentions)
-        const question = cast.text.replace(/@\w+/g, '').trim();
-        console.log('Processing question:', question);
+      if (!mentioned) {
+        console.log("Bot not mentioned, ignoring");
+        return { status: "ok" };
+      }
 
-        // Generate tarot reading
-        const reading = await tarotReader.getReading(question);
-        console.log('Generated reading:', reading);
+      // Extract the question (remove the bot mention)
+      const text = body.data.text.replace(/@tairot/g, "").trim();
+      console.log("Processing question:", text);
 
-        // Reply to the cast
-        await neynar.publishCast({
-          signerUuid: process.env.SIGNER_UID!,
+      // Check if API clients are initialized
+      if (!neynarClient || !openaiClient || !tarotReader) {
+        console.error("API clients not initialized. Check environment variables.");
+        set.status = 503;
+        return { error: "Service unavailable - missing configuration" };
+      }
+
+      // Get the tarot reading
+      const reading = await tarotReader.getReading(text);
+
+      // Reply to the cast
+      if (process.env.SIGNER_UID) {
+        await neynarClient.publishCast({
+          signerUuid: process.env.SIGNER_UID,
           text: reading,
-          parent: cast.hash
+          parent: body.data.hash
         });
-
-        return new Response(JSON.stringify({ success: true }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        });
+      } else {
+        console.error("Missing SIGNER_UID environment variable");
       }
+
+      return { status: "ok" };
+    } catch (error) {
+      console.error("Error processing webhook:", error);
+      // Always return 200 to acknowledge receipt
+      return { status: "error", message: "Internal error, but webhook received" };
     }
-
-    // Return 200 for unhandled events
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-  } catch (error: any) {
-    console.error('Error:', error);
-    return new Response(
-      JSON.stringify({
-        error: error.message,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
-  }
-}
+  });
 
 // Local development server
 if (process.env.NODE_ENV !== 'production') {
+  const port = process.env.PORT ? parseInt(process.env.PORT) : 3001;
+  console.log(`🔮 Tarot bot server running on port ${port}`);
+  
   const server = Bun.serve({
-    port: process.env.PORT ? parseInt(process.env.PORT) : 3000,
-    fetch: handler
+    fetch: app.fetch,
+    port: port
   });
-
-  console.log(`🔮 Tarot bot server running on port ${server.port}`);
 }
+
+// Export for serverless deployment
+export default app;
