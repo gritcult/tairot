@@ -3,31 +3,18 @@ import { NeynarAPIClient, Configuration } from "@neynar/nodejs-sdk";
 import OpenAI from "openai";
 import { TarotReader } from "./tarot.js";
 
-// Initialize API clients only if environment variables are present
-let neynarClient: NeynarAPIClient | null = null;
-let openaiClient: OpenAI | null = null;
-let tarotReader: TarotReader | null = null;
+// Initialize API clients
+const neynarClient = new NeynarAPIClient(
+  new Configuration({ apiKey: process.env.NEYNAR_API_KEY! })
+);
 
-try {
-  if (!process.env.NEYNAR_API_KEY) {
-    console.error("Missing NEYNAR_API_KEY environment variable");
-  } else {
-    const config = new Configuration({ apiKey: process.env.NEYNAR_API_KEY });
-    neynarClient = new NeynarAPIClient(config);
-  }
+const openaiClient = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
-  if (!process.env.OPENAI_API_KEY) {
-    console.error("Missing OPENAI_API_KEY environment variable");
-  } else {
-    openaiClient = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
-    tarotReader = new TarotReader(openaiClient);
-  }
-} catch (error) {
-  console.error("Error initializing API clients:", error);
-}
+const tarotReader = new TarotReader(openaiClient);
 
+// Define webhook types
 interface WebhookBody {
   type: string;
   data: {
@@ -37,6 +24,7 @@ interface WebhookBody {
   };
 }
 
+// Create the server
 const app = new Elysia()
   .get("/", () => "🔮 Tarot bot is alive")
   .post("/webhook", async ({ body, set }: { body: WebhookBody, set: { status: number } }) => {
@@ -59,7 +47,7 @@ const app = new Elysia()
       // Check if the bot was mentioned
       const botFid = process.env.BOT_FID;
       const mentioned = body.data.mentioned_profiles?.some(
-        (profile) => profile.fid === botFid
+        (profile: { fid: string }) => profile.fid === botFid
       );
 
       if (!mentioned) {
@@ -71,13 +59,6 @@ const app = new Elysia()
       const text = body.data.text.replace(/@tairot/g, "").trim();
       console.log("Processing question:", text);
 
-      // Check if API clients are initialized
-      if (!neynarClient || !openaiClient || !tarotReader) {
-        console.error("API clients not initialized. Check environment variables.");
-        set.status = 503;
-        return { error: "Service unavailable - missing configuration" };
-      }
-
       // Get the tarot reading
       const reading = await tarotReader.getReading(text);
 
@@ -88,30 +69,25 @@ const app = new Elysia()
           text: reading,
           parent: body.data.hash
         });
-      } else {
-        console.error("Missing SIGNER_UID environment variable");
       }
 
       return { status: "ok" };
     } catch (error) {
       console.error("Error processing webhook:", error);
-      // Always return 200 to acknowledge receipt
       return { status: "error", message: "Internal error, but webhook received" };
     }
   });
 
-// Local development server
-if (process.env.NODE_ENV !== 'production' && typeof Bun !== 'undefined') {
-  const port = process.env.PORT ? parseInt(process.env.PORT) : 3001;
-  console.log(`🔮 Tarot bot server running on port ${port}`);
-  
-  const server = Bun.serve({
+// For local development
+if (process.env.NODE_ENV === 'development') {
+  console.log("Starting development server...");
+  const port = process.env.PORT ? parseInt(process.env.PORT) : 3002;
+  Bun.serve({
     fetch: app.fetch,
     port: port
   });
+  console.log(`🔮 Tarot bot server running on port ${port}`);
 }
 
-// Export for serverless deployment
-export default {
-  fetch: app.fetch
-};
+// Export for Vercel
+export default app;
