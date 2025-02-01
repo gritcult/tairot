@@ -101,7 +101,7 @@ const app = new Elysia()
   });
 
 // Local development server
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV !== 'production' && typeof Bun !== 'undefined') {
   const port = process.env.PORT ? parseInt(process.env.PORT) : 3001;
   console.log(`🔮 Tarot bot server running on port ${port}`);
   
@@ -112,4 +112,6 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // Export for serverless deployment
-export default app;
+export default {
+  fetch: app.fetch
+};

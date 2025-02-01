@@ -8,17 +8,17 @@
     "start": "bun src/index.ts",
     "dev": "bun --watch src/index.ts",
     "build": "tsc",
-    "vercel-build": "tsc"
+    "vercel-build": "tsc && cp package.json dist/"
   },
   "dependencies": {
     "@neynar/nodejs-sdk": "^2.9.0",
     "@types/node": "^22.13.0",
     "dotenv": "^16.4.1",
     "elysia": "^1.2.11",
-    "openai": "^4.28.0"
+    "openai": "^4.28.0",
+    "typescript": "^5.0.0"
   },
   "devDependencies": {
-    "bun-types": "latest",
-    "typescript": "^5.0.0"
+    "bun-types": "latest"
   }
 }
